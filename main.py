@@ -92,3 +92,42 @@ else:
     club_name = matches[choice - 1]
     club_id = club_name_to_id[club_name]
     print(f'Selected club: {club_name} (ID: {club_id})')
+
+opponent_input = input('Enter the opponent club name: ')
+matches = [name for name in club_name_to_id.keys() if opponent_input.lower() in name.lower()]
+if not matches:
+    print("No matching club found.")
+else:
+    for i, name in enumerate(matches):
+        print(f'{i + 1}. {name}')
+
+    choice = int(input('Select the opponent club number: '))
+    opponent_name = matches[choice - 1]
+    opponent_id = club_name_to_id[opponent_name]
+    print(f'Selected opponent club: {opponent_name} (ID: {opponent_id})')
+
+def predict_match(club_id, opponent_id, hosting, home_club_position, away_club_position, round):
+    club_market_value = club_value.loc[club_value['club_id'] == club_id, 'club_market_value'].values[0]
+    opponent_market_value = opponent_value.loc[opponent_value['opponent_id'] == opponent_id, 'opponent_market_value'].values[0]
+    input_data = pd.DataFrame({
+        'club_id': [club_id],
+        'opponent_id': [opponent_id],
+        'hosting': le_hosting.transform([hosting]),
+        'home_club_position': [home_club_position],
+        'away_club_position': [away_club_position],
+        'round': le_round.transform([round]),
+        'club_market_value': [club_market_value],
+        'opponent_market_value': [opponent_market_value]
+    })
+
+    prediction = model.predict(input_data)
+    predicted_result = le_result.inverse_transform(prediction)[0]
+    return predicted_result
+
+hosting = input('Who is hosting the match? (home/away): ').strip().title()
+home_club_position = int(input('Enter the home club position: '))
+away_club_position = int(input('Enter the away club position: '))
+round = input('Enter the round of the match: ')
+round = f'{round}. Matchday'
+predicted_result = predict_match(club_id, opponent_id, hosting, home_club_position, away_club_position, round)
+print(f'Predicted match result: {predicted_result}')
