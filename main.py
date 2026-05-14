@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
+import joblib
+import os
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from difflib import get_close_matches
+
 
 # Read CSV variables
 competitions = pd.read_csv('data/competitions.csv')
@@ -74,10 +77,13 @@ X_train, X_test, y_train, y_test = train_test_split(
     )
 
 # Train Random Forest Classifier
-model = RandomForestClassifier(n_estimators = 200, random_state=42)
-model.fit(X_train, y_train)
-
-y_pred = model.predict(X_test)
+if os.path.exists('model.pkl'):
+    model = joblib.load('model.pkl')
+else:
+    model = RandomForestClassifier(n_estimators = 200, random_state=42)
+    model.fit(X_train, y_train)
+    joblib.dump(model, 'model.pkl')
+    y_pred = model.predict(X_test)
 
 club_input = input('Enter the club name: ')
 matches = [name for name in club_name_to_id.keys() if club_input.lower() in name.lower()]

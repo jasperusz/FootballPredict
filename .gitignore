@@ -219,3 +219,6 @@ __marimo__/
 
 # Dataset
 data/
+
+#Trained model
+model.pkl
