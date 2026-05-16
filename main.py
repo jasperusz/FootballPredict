@@ -10,12 +10,10 @@ from difflib import get_close_matches
 
 
 # Read CSV variables
-competitions = pd.read_csv('data/competitions.csv')
+
 clubs_infos = pd.read_csv('data/clubs.csv')
 club_games = pd.read_csv('data/club_games.csv')
 games = pd.read_csv('data/games.csv')
-game_events = pd.read_csv('data/game_events.csv')
-appearances = pd.read_csv('data/appearances.csv')
 players_infos = pd.read_csv('data/players.csv')
 player_valuations = pd.read_csv('data/player_valuations.csv')
 merged_games_data = pd.merge(games, club_games)
@@ -55,8 +53,7 @@ game_results = np.select(conditions, choices, default='unknown')
 merged_games_data['result'] = game_results
 
 # Machine Learning Variables
-X = merged_games_data[['club_id', 'opponent_id', 'hosting', 'home_club_position',\
-                        'away_club_position', 'round', 'club_market_value', 'opponent_market_value']].dropna()
+X = merged_games_data[['club_id', 'opponent_id', 'hosting', 'club_market_value', 'opponent_market_value']].dropna()
 y = merged_games_data['result']
 y = y.loc[X.index]
 
@@ -66,7 +63,6 @@ le_round = LabelEncoder()
 le_result = LabelEncoder()
 
 X['hosting'] = le_hosting.fit_transform(X['hosting'])
-X['round'] = le_round.fit_transform(X['round'])
 y = le_result.fit_transform(y)
 
 # Split data
@@ -84,6 +80,7 @@ else:
     model.fit(X_train, y_train)
     joblib.dump(model, 'model.pkl')
     y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
 
 club_input = input('Enter the club name: ')
 matches = [name for name in club_name_to_id.keys() if club_input.lower() in name.lower()]
@@ -112,16 +109,13 @@ else:
     opponent_id = club_name_to_id[opponent_name]
     print(f'Selected opponent club: {opponent_name} (ID: {opponent_id})')
 
-def predict_match(club_id, opponent_id, hosting, home_club_position, away_club_position, round):
+def predict_match(club_id, opponent_id, hosting):
     club_market_value = club_value.loc[club_value['club_id'] == club_id, 'club_market_value'].values[0]
     opponent_market_value = opponent_value.loc[opponent_value['opponent_id'] == opponent_id, 'opponent_market_value'].values[0]
     input_data = pd.DataFrame({
         'club_id': [club_id],
         'opponent_id': [opponent_id],
         'hosting': le_hosting.transform([hosting]),
-        'home_club_position': [home_club_position],
-        'away_club_position': [away_club_position],
-        'round': le_round.transform([round]),
         'club_market_value': [club_market_value],
         'opponent_market_value': [opponent_market_value]
     })
@@ -131,9 +125,8 @@ def predict_match(club_id, opponent_id, hosting, home_club_position, away_club_p
     return predicted_result
 
 hosting = input('Who is hosting the match? (home/away): ').strip().title()
-home_club_position = int(input('Enter the home club position: '))
-away_club_position = int(input('Enter the away club position: '))
-round = input('Enter the round of the match: ')
-round = f'{round}. Matchday'
-predicted_result = predict_match(club_id, opponent_id, hosting, home_club_position, away_club_position, round)
-print(f'Predicted match result: {predicted_result}')
+predicted_result = predict_match(club_id, opponent_id, hosting)
+print(f'Predicted match result: home team {predicted_result}')
+
+accuracy = accuracy * 100
+print(f'Model accuracy: {accuracy:.2f}')
