@@ -22,8 +22,11 @@ merged_games_data = pd.merge(games, club_games)
 season_played = games['season']
 club_position = games['home_club_position']
 opponent_position = games['away_club_position']
+recent_club_position = games.sort_values('date').groupby('home_club_id')['home_club_position'].last()
+recent_opponent_position = games.sort_values('date').groupby('away_club_id')['away_club_position'].last()
 club_goals_history = games['home_club_goals']
 opponent_goals_history = games['away_club_goals']
+
 
 # Club info Variables
 club_name_to_id = clubs_infos.set_index('name')['club_id'].to_dict()
@@ -31,11 +34,17 @@ club_value = player_valuations.groupby('current_club_id')['market_value_in_eur']
 club_value = club_value.reset_index()
 club_value.columns = ['club_id', 'club_market_value']
 merged_games_data = merged_games_data.merge(club_value, on='club_id', how='left')
+recent_club_position = recent_club_position.reset_index()
+recent_club_position.columns = ['home_club_id', 'recent_club_position']
+merged_games_data = merged_games_data.merge(recent_club_position, on='home_club_id', how='left')
 
 # Oponnent info Variables
 opponent_value = club_value.copy()
 opponent_value.columns = ['opponent_id', 'opponent_market_value']
 merged_games_data = merged_games_data.merge(opponent_value, on='opponent_id', how='left')
+recent_opponent_position = recent_opponent_position.reset_index()
+recent_opponent_position.columns = ['away_club_id', 'recent_opponent_position']
+merged_games_data = merged_games_data.merge(recent_opponent_position, on='away_club_id', how='left')
 
 # Club Games Variables
 own_goals = club_games['own_goals']
@@ -53,7 +62,8 @@ game_results = np.select(conditions, choices, default='unknown')
 merged_games_data['result'] = game_results
 
 # Machine Learning Variables
-X = merged_games_data[['club_id', 'opponent_id', 'hosting', 'club_market_value', 'opponent_market_value']].dropna()
+X = merged_games_data[['club_id', 'opponent_id', 'hosting', 'club_market_value', \
+                       'recent_club_position', 'recent_opponent_position', 'opponent_market_value']].dropna()
 y = merged_games_data['result']
 y = y.loc[X.index]
 
@@ -81,6 +91,7 @@ else:
     joblib.dump(model, 'model.pkl')
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
+    accuracy = accuracy * 100
 
 club_input = input('Enter the club name: ')
 matches = [name for name in club_name_to_id.keys() if club_input.lower() in name.lower()]
@@ -109,14 +120,21 @@ else:
     opponent_id = club_name_to_id[opponent_name]
     print(f'Selected opponent club: {opponent_name} (ID: {opponent_id})')
 
-def predict_match(club_id, opponent_id, hosting):
+def predict_match(club_id, opponent_id, hosting, recent_club_position, recent_opponent_position):
     club_market_value = club_value.loc[club_value['club_id'] == club_id, 'club_market_value'].values[0]
     opponent_market_value = opponent_value.loc[opponent_value['opponent_id'] == opponent_id, 'opponent_market_value'].values[0]
+    recent_club_position = recent_club_position.loc[recent_club_position['home_club_id']\
+                                                     == club_id, 'recent_club_position'].values[0]
+    recent_opponent_position = recent_opponent_position.loc[recent_opponent_position['away_club_id']\
+                                                             == opponent_id, 'recent_opponent_position'].values[0]
+
     input_data = pd.DataFrame({
         'club_id': [club_id],
         'opponent_id': [opponent_id],
         'hosting': le_hosting.transform([hosting]),
         'club_market_value': [club_market_value],
+        'recent_club_position': [recent_club_position],
+        'recent_opponent_position': [recent_opponent_position],
         'opponent_market_value': [opponent_market_value]
     })
 
@@ -125,8 +143,7 @@ def predict_match(club_id, opponent_id, hosting):
     return predicted_result
 
 hosting = input('Who is hosting the match? (home/away): ').strip().title()
-predicted_result = predict_match(club_id, opponent_id, hosting)
+predicted_result = predict_match(club_id, opponent_id, hosting, recent_club_position, recent_opponent_position)
 print(f'Predicted match result: home team {predicted_result}')
 
-accuracy = accuracy * 100
 print(f'Model accuracy: {accuracy:.2f}')
