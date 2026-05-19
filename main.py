@@ -37,6 +37,11 @@ merged_games_data = merged_games_data.merge(club_value, on='club_id', how='left'
 recent_club_position = recent_club_position.reset_index()
 recent_club_position.columns = ['home_club_id', 'recent_club_position']
 merged_games_data = merged_games_data.merge(recent_club_position, on='home_club_id', how='left')
+club_win_rate = club_games[club_games['is_win'] == 1].groupby('club_id').size() / \
+    club_games.groupby('club_id').size()
+club_win_rate = club_win_rate.reset_index()
+club_win_rate.columns = ['club_id', 'club_win_rate']
+merged_games_data = merged_games_data.merge(club_win_rate, on='club_id', how='left')
 
 # Oponnent info Variables
 opponent_value = club_value.copy()
@@ -60,10 +65,11 @@ choices = ['win', 'loss', 'draw']
 
 game_results = np.select(conditions, choices, default='unknown')
 merged_games_data['result'] = game_results
+merged_games_data = merged_games_data[merged_games_data['season'] >= 2023]
 
 # Machine Learning Variables
 X = merged_games_data[['club_id', 'opponent_id', 'hosting', 'club_market_value', \
-                       'recent_club_position', 'recent_opponent_position', 'opponent_market_value']].dropna()
+                       'recent_club_position', 'recent_opponent_position', 'opponent_market_value', 'club_win_rate']]
 y = merged_games_data['result']
 y = y.loc[X.index]
 
@@ -120,13 +126,14 @@ else:
     opponent_id = club_name_to_id[opponent_name]
     print(f'Selected opponent club: {opponent_name} (ID: {opponent_id})')
 
-def predict_match(club_id, opponent_id, hosting, recent_club_position, recent_opponent_position):
+def predict_match(club_id, opponent_id, hosting, recent_club_position, recent_opponent_position, club_win_rate):
     club_market_value = club_value.loc[club_value['club_id'] == club_id, 'club_market_value'].values[0]
     opponent_market_value = opponent_value.loc[opponent_value['opponent_id'] == opponent_id, 'opponent_market_value'].values[0]
     recent_club_position = recent_club_position.loc[recent_club_position['home_club_id']\
                                                      == club_id, 'recent_club_position'].values[0]
     recent_opponent_position = recent_opponent_position.loc[recent_opponent_position['away_club_id']\
                                                              == opponent_id, 'recent_opponent_position'].values[0]
+    club_win_rate_value = club_win_rate.loc[club_win_rate['club_id'] == club_id, 'club_win_rate'].values[0]
 
     input_data = pd.DataFrame({
         'club_id': [club_id],
@@ -135,7 +142,8 @@ def predict_match(club_id, opponent_id, hosting, recent_club_position, recent_op
         'club_market_value': [club_market_value],
         'recent_club_position': [recent_club_position],
         'recent_opponent_position': [recent_opponent_position],
-        'opponent_market_value': [opponent_market_value]
+        'opponent_market_value': [opponent_market_value],
+        'club_win_rate': [club_win_rate_value]
     })
 
     prediction = model.predict(input_data)
@@ -143,7 +151,7 @@ def predict_match(club_id, opponent_id, hosting, recent_club_position, recent_op
     return predicted_result
 
 hosting = input('Who is hosting the match? (home/away): ').strip().title()
-predicted_result = predict_match(club_id, opponent_id, hosting, recent_club_position, recent_opponent_position)
+predicted_result = predict_match(club_id, opponent_id, hosting, recent_club_position, recent_opponent_position, club_win_rate)
 print(f'Predicted match result: home team {predicted_result}')
 
 print(f'Model accuracy: {accuracy:.2f}')
